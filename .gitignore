@@ -1,0 +1,28 @@
+# Haxe → C++ build output (hxcpp writes generated sources, obj/, and the
+# binary under the -cpp output directory).
+/bin
+/build
+/out
+dump/
+
+# Project-local haxelib repository (`haxelib newrepo`)
+.haxelib/
+
+# Developer-local links into agent-tooling state (Claude Code project data,
+# opencode config/data, llama.cpp cache) — user-specific absolute paths.
+# Only .dev/README.md is committed; recreate the links per machine as it describes.
+/.dev/*
+!/.dev/README.md
+
+# Editor / OS noise — left broad on purpose so a contributor doesn't
+# accidentally commit their IDE scratch or macOS metadata.
+.DS_Store
+*.swp
+*.swo
+/.idea/
+/.vscode/*
+!/.vscode/settings.json.example
+!/.vscode/extensions.json
+
+# Claude Code local (per-user) settings
+/.claude/settings.local.json*
