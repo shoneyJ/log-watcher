@@ -24,6 +24,7 @@ log-watcher/
 │   ├── 03-cron-parser.md            cron.d parsing generates watcher config
 │   ├── 04-implementation-phases.md  five phases, all complete
 │   ├── 05-flock-aware-watching.md   flock note + skip-locked windows
+│   ├── 06-mcp-server-implementation.md  task-by-task plan for the MCP specs
 │   └── feature-doc/                 per-feature docs, one file per feature
 │       ├── cron-agent.md            embedded LLM agent — superseded by mcp-server.md
 │       ├── mcp-server.md            MCP server design spec (tools over authed HTTP)
