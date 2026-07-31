@@ -24,7 +24,8 @@ log-watcher/
 │   ├── 03-cron-parser.md            cron.d parsing generates watcher config
 │   ├── 04-implementation-phases.md  five phases, all complete
 │   ├── 05-flock-aware-watching.md   flock note + skip-locked windows
-│   └── 06-cron-agent.md             LLM cron agent — raw intent, open questions
+│   └── feature-doc/                 per-feature docs, one file per feature
+│       └── cron-agent.md            LLM cron agent — raw intent, open questions
 ├── src/
 │   ├── Main.hx                      CLI entry: `watch` and `run`
 │   ├── LogTail.hx                   chunked tail reader + line classification

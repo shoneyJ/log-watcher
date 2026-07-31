@@ -113,6 +113,7 @@ A log watcher, written in Haxe and transpiled to C++ (hxcpp) into a native binar
 - `plan/03-cron-parser.md` — parsing `/etc/cron.d` generates watcher config: the log path comes from the entry's output redirection, schedules feed a `nextFire()` function, and the cron.d directory path is a parameter so tests run on fixture dirs without root.
 - `plan/04-implementation-phases.md` — the implementation roadmap: five verifiable phases (tail reader → watch loop → cron parser → supervisor → end-to-end validation), zero-dependency tests via `haxe test.hxml`. Tick a phase's checkbox there when it lands, and keep README/CLAUDE.md commands in sync.
 - `plan/05-flock-aware-watching.md` — flock-wrapped cron entries also yield their lock file (extends plan 03's extraction); the supervisor probes the lock shortly before each fire and skips a window whose lock is still held; ambiguous probes fall back to watching.
+- `plan/feature-doc/` — per-feature documentation, one separately named file per feature (e.g. `cron-agent.md`, the planned LLM cron agent — raw intent, not yet designed or built).
 
 When refining or adding plans, work as a systems engineer: turn vague notes into testable decisions, keep every original requirement, and add supersession notes to older plans instead of silently contradicting them.
 
