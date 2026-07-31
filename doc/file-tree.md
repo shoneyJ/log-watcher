@@ -25,7 +25,8 @@ log-watcher/
 │   ├── 04-implementation-phases.md  five phases, all complete
 │   ├── 05-flock-aware-watching.md   flock note + skip-locked windows
 │   └── feature-doc/                 per-feature docs, one file per feature
-│       └── cron-agent.md            LLM cron agent — raw intent, open questions
+│       ├── cron-agent.md            embedded LLM agent — superseded by mcp-server.md
+│       └── mcp-server.md            MCP server design spec (tools over authed HTTP)
 ├── src/
 │   ├── Main.hx                      CLI entry: `watch` and `run`
 │   ├── LogTail.hx                   chunked tail reader + line classification
