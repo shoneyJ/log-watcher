@@ -48,7 +48,7 @@ Design documents, in order — later plans supersede earlier ones where noted:
 4. [Implementation phases](plan/04-implementation-phases.md) — ordered roadmap from design to working watcher, with per-phase verification.
 5. [Flock-aware watching](plan/05-flock-aware-watching.md) — flock-wrapped cron entries also yield their lock file; a window whose lock is still held at fire time is skipped.
 
-Per-feature design docs live in [plan/feature-doc/](plan/feature-doc/), one file per feature — currently the [MCP server spec](plan/feature-doc/mcp-server.md) (cron/log tools over authenticated localhost HTTP; supersedes the embedded-agent plan in `cron-agent.md`).
+Per-feature design docs live in [plan/feature-doc/](plan/feature-doc/), one file per feature — currently the [MCP server spec](plan/feature-doc/mcp-server.md) (cron/log tools over authenticated localhost HTTP; supersedes the embedded-agent plan in `cron-agent.md`) and the [minilog database spec](plan/feature-doc/minilog-db.md) (recent log tails loaded into a temporary sqlite DB for SQL analysis).
 
 ## out of scope
 

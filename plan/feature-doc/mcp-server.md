@@ -1,5 +1,11 @@
 # MCP server — design spec
 
+> Extended by `minilog-db.md` (2026-07-31): two more tools —
+> `load_log_db` / `query_log_db` — load hint-selected log tails into a
+> temporary in-memory sqlite database for SQL analysis. The server there
+> grows to six tools and gains one piece of process state (the single DB
+> slot).
+
 Approved design, 2026-07-31. Supersedes `cron-agent.md`: instead of the
 binary calling an LLM itself (embedded curl agent loop), the binary exposes
 its cron/log knowledge as **MCP tools** over authenticated HTTP, and any

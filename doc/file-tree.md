@@ -26,7 +26,8 @@ log-watcher/
 │   ├── 05-flock-aware-watching.md   flock note + skip-locked windows
 │   └── feature-doc/                 per-feature docs, one file per feature
 │       ├── cron-agent.md            embedded LLM agent — superseded by mcp-server.md
-│       └── mcp-server.md            MCP server design spec (tools over authed HTTP)
+│       ├── mcp-server.md            MCP server design spec (tools over authed HTTP)
+│       └── minilog-db.md            temp sqlite DB of recent log tails (extends MCP)
 ├── src/
 │   ├── Main.hx                      CLI entry: `watch` and `run`
 │   ├── LogTail.hx                   chunked tail reader + line classification
