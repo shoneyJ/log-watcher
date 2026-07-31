@@ -33,6 +33,10 @@ What the parser extracts from a job line:
 | command (script) | process-liveness check in completion detection (plan 02) |
 | redirection target | **the log path** — from `>`, `>>`, `2>`, `2>>`, `&>`, `&>>` |
 
+> Extended by `05-flock-aware-watching.md`: from watchable commands the
+> parser additionally extracts a sixth field — the flock lock file path —
+> feeding the supervisor's skip-locked rule.
+
 **Watchability convention**: an entry is watchable only if its command
 redirects stdout/stderr to a file path ending in `.log`. Entries without
 such a redirection (no redirect, pipe to `logger`, `$VAR` in the path) are

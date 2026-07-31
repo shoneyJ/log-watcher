@@ -43,7 +43,8 @@ One config file read at startup, one entry per watched log:
 - `path` — the log file (e.g. `/var/log/file.log`)
 - `mode` — `service` | `cron`
 - `cron_match` — command substring identifying the `/etc/cron.d` entry
-  (cron mode only)
+  (cron mode only). *Superseded by `03-cron-parser.md`: cron configs are now
+  generated from the entry's own log redirection, not matched by hand.*
 - `poll_interval` — tail-check period (default a few seconds)
 - `quiet_period` — silence window used both for "job is done" (cron mode)
   and for "last error was final" (the alert rule)
@@ -75,7 +76,10 @@ Sizing target: **10 log files, ~2 GB each.**
   exist only inside their job's window (see kill-self guarantee above).
 - hxcpp supports `sys.thread.Thread` — threads inside the one process are
   the simpler first choice; child processes only if isolation proves
-  necessary.
+  necessary. *Superseded by the implementation (plan 04, `src/Supervisor.hx`):
+  a single-threaded loop polls all active watches; no threads at all. The
+  kill-self guarantee holds by construction — a completed watch is an object
+  that is dropped, and file handles live only inside one poll call.*
 
 ## Edge cases to handle
 

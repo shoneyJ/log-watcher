@@ -10,6 +10,16 @@ machine (commands below).
 | --- | --- | --- |
 | `claude-project/` | `~/.claude/projects/<this-repo, slashes→dashes>` | Claude Code's per-project state: session transcripts (`*.jsonl`) and `memory/` (the persistent memory index + facts). Grep a past session, read/curate what Claude remembers about this repo. |
 
+## reference/ — related source trees
+
+`reference/` holds read-only symlinks to related projects under
+`~/projects/` used as reference material — analyze the referenced files
+when their behavior matters to this repo:
+
+| Link | Points at | Why it's a reference |
+| --- | --- | --- |
+| `reference/cronie/` | `~/projects/cronie` | The cronie cron daemon sources — the authority on cron.d parsing and scheduling semantics that `src/Cron.hx` mimics. |
+
 Deliberately **not** linked (global, cross-project state): `~/.claude`
 (all projects' transcripts), `~/.config/opencode` and
 `~/.local/share/opencode` (global config; sessions for every project,
@@ -29,6 +39,8 @@ Run from the repo root:
 
 ```bash
 ln -sfn "$HOME/.claude/projects/$(pwd | tr / -)" .dev/claude-project
+mkdir -p .dev/reference
+ln -sfn "$HOME/projects/cronie" .dev/reference/cronie
 ```
 
 (`claude-project`: Claude Code names the directory after the repo's absolute

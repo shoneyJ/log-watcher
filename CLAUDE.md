@@ -85,6 +85,7 @@ Always inspect crashsites. Always measure. Never assume.
 - caveman
 - context-mode
 - web-search
+- superpowers
 
 ---
 
@@ -97,8 +98,10 @@ A log watcher, written in Haxe and transpiled to C++ (hxcpp) into a native binar
 ## Commands
 
 - Build the native binary: `haxe build.hxml` — emits generated C++ into `bin/` and compiles it with g++. The first hxcpp build is slow (compiles the runtime, then cached); later builds are incremental.
-- Run: `./bin/Main`
-- Fast dev loop without the C++ compile: `haxe --class-path src --main Main --interp` — same `sys.*` APIs work on the interpreter.
+- Run: `./bin/Main watch <logfile>` (single continuous watch) or `./bin/Main run <cron.d-dir> [config.json]` (supervisor).
+- Tests (fast, interpreter): `haxe test.hxml` — run from the repo root; zero-dependency plain asserts in `test/TestMain.hx`.
+- Tests (native, required before calling work done): `haxe test-native.hxml && ./bin/test/TestMain`.
+- End-to-end demo on the committed fixture (~2.5 min): `./test/demo.sh`.
 - Fresh-machine setup: `sudo apt install haxe` (Ubuntu 24.04 ships Haxe 4.3.x + neko), then from the repo root `haxelib newrepo && haxelib install hxcpp`. Libraries live in the project-local `.haxelib/` (gitignored).
 
 ## Design docs
@@ -108,8 +111,12 @@ A log watcher, written in Haxe and transpiled to C++ (hxcpp) into a native binar
 - `plan/01.md` — toolchain and environment setup.
 - `plan/02-what-gets-monitored.md` — the two watcher lifecycles (continuous for service logs; "alive only when needed" for cron logs), the 10 × 2 GB scale constraints (tail-chunk reads only, never full scans; logrotate detection via inode/size), and the kill-self guarantee for cron watchers.
 - `plan/03-cron-parser.md` — parsing `/etc/cron.d` generates watcher config: the log path comes from the entry's output redirection, schedules feed a `nextFire()` function, and the cron.d directory path is a parameter so tests run on fixture dirs without root.
+- `plan/04-implementation-phases.md` — the implementation roadmap: five verifiable phases (tail reader → watch loop → cron parser → supervisor → end-to-end validation), zero-dependency tests via `haxe test.hxml`. Tick a phase's checkbox there when it lands, and keep README/CLAUDE.md commands in sync.
+- `plan/05-flock-aware-watching.md` — flock-wrapped cron entries also yield their lock file (extends plan 03's extraction); the supervisor probes the lock shortly before each fire and skips a window whose lock is still held; ambiguous probes fall back to watching.
 
 When refining or adding plans, work as a systems engineer: turn vague notes into testable decisions, keep every original requirement, and add supersession notes to older plans instead of silently contradicting them.
+
+`doc/` holds the current **as-built facts**: project facts (`doc/README.md`), feature documentation (`doc/features.md`), mermaid diagrams (`doc/diagrams.md`), and the repository file tree (`doc/file-tree.md`). Unlike `plan/` (history with supersession notes), `doc/` must always describe what exists now — update it in the same change as any code or layout change.
 
 ## Repo conventions
 

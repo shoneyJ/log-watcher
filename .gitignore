@@ -8,6 +8,12 @@ dump/
 # Project-local haxelib repository (`haxelib newrepo`)
 .haxelib/
 
+# Logs written by the live testing base (test/fixtures/cron.d/log-producer)
+/test/live/
+
+# Scratch files created by the test suite
+/test/tmp/
+
 # Developer-local links into agent-tooling state (Claude Code project data,
 # opencode config/data, llama.cpp cache) — user-specific absolute paths.
 # Only .dev/README.md is committed; recreate the links per machine as it describes.
