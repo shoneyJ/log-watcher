@@ -5,7 +5,7 @@ One small native binary that catches the failure classic monitoring misses:
 metrics endpoint, no exporter, no agent framework — it reads the tails of
 the log files you already have.
 
-## Why a devops team installs this
+## Key Features
 
 - **Detects silent deaths.** The rule: last log entry is `error` and
   nothing follows for a quiet period → the process stalled or crashed
@@ -28,9 +28,10 @@ the log files you already have.
 - **LLM-assisted debugging built in.** A localhost-only, Bearer-token MCP
   API exposes six tools (which cron jobs run right now, list/tail/search
   logs, load recent tails into a temporary in-memory sqlite DB and query
-  it with SQL). Developers SSH-tunnel in and ask Claude Code — or any MCP
-  client — "is anything failing?", "count errors per level in the last
-  100 MB", "tail the inventory service log".
+  it with SQL). Anyone running services or cron jobs on a Linux box can
+  SSH-tunnel in and ask Claude Code — or any MCP client — "is anything
+  failing?", "which cron jobs are running right now?", "count errors per
+  level across the last 100 MB of any watched log".
 - **Sane on big logs.** Every read is a bounded tail chunk (64 KiB;
   search capped at the last 4 MiB) — designed for 10 × 2 GB logs; a poll
   never scans a file front to back, and rotation (rename or truncate) is
@@ -106,25 +107,77 @@ Building needs Haxe 4.3.x + g++ (see the guide).
 The watcher only needs **read** access: to the cron.d directory and to the
 watched log files (on Debian/Ubuntu, membership in the `adm` group typically
 covers `/var/log`). It never writes to or executes anything from cron
-entries; detections go to stdout.
+entries; detections go to stdout and, when configured, the JSONL
+detections file.
+
+## Configuring and Running the MCP Server
+
+One config file drives both services (`/opt/log-watcher/config.json`;
+sample: [deploy/config.sample.json](deploy/config.sample.json)):
+
+```json
+{
+  "services":   ["/var/log/myservice/app.log"],
+  "logs":       ["/var/log/postgresql/postgresql-16-main.log"],
+  "detections": "/var/lib/log-watcher/detections.jsonl",
+  "mcp":        { "port": 8990 }
+}
+```
+
+- `services` — logs watched continuously; `logs` — extra logs queryable
+  over MCP only. The MCP allowlist = cron.d-derived logs ∪ both lists;
+  nothing outside it is reachable through the API.
+- The API key lives in `/opt/log-watcher/.env`
+  (`LOG_WATCHER_API_KEY=$(openssl rand -hex 32)`, root:log-watcher 640),
+  loaded by the systemd unit — the config file stays world-readable.
+
+Run it:
+
+```bash
+sudo systemctl enable --now log-watcher-mcp     # or: just enable (both units)
+# ad hoc, without systemd:
+LOG_WATCHER_API_KEY=... log-watcher mcp /etc/cron.d /opt/log-watcher/config.json
+```
+
+The server binds **127.0.0.1 only**; every request needs
+`Authorization: Bearer <key>`. From a workstation, tunnel and attach any
+MCP client:
+
+```bash
+ssh -N -L 8990:127.0.0.1:8990 your-server &
+claude mcp add --transport http cron-mcp http://127.0.0.1:8990/mcp \
+  --header "Authorization: Bearer <key>"
+```
+
+Tools: `get_running_crons`, `list_logs`, `tail_log`, `search_log`,
+`load_log_db`, `query_log_db`. Full protocol and config reference:
+[doc/install.md](doc/install.md), [plan/feature-doc/mcp-server.md](plan/feature-doc/mcp-server.md).
 
 ## Documentation
 
-Current as-built facts — feature documentation, mermaid diagrams, and the
-repository file tree — live in [doc/](doc/).
+As-built documentation (`doc/` — always describes what exists now):
 
-## Plan
+- [doc/README.md](doc/README.md) — project facts + index
+- [doc/features.md](doc/features.md) — feature documentation per module
+- [doc/diagrams.md](doc/diagrams.md) — mermaid diagrams
+- [doc/file-tree.md](doc/file-tree.md) — annotated repository file tree
+- [doc/install.md](doc/install.md) — server installation guide (requirements, systemd, Rocky/RHEL, cross-building)
+- [doc/server-testing.md](doc/server-testing.md) — live-server validation guide
+- [CLAUDE.md](CLAUDE.md) — contributor/agent instructions and repo conventions
 
-Design documents, in order — later plans supersede earlier ones where noted:
+Design history (`plan/` — read in order, later docs supersede earlier where noted):
 
-1. [Toolchain and development environment](plan/01.md) — Haxe → C++ pipeline, system requirements, setup and verification.
-2. [What gets monitored](plan/02-what-gets-monitored.md) — watcher lifecycles for service vs cron logs, scale constraints (10 × 2 GB), kill-self guarantee.
-3. [Cron parser](plan/03-cron-parser.md) — parsing `/etc/cron.d` to generate watcher config from each entry's log redirection.
-4. [Implementation phases](plan/04-implementation-phases.md) — ordered roadmap from design to working watcher, with per-phase verification.
-5. [Flock-aware watching](plan/05-flock-aware-watching.md) — flock-wrapped cron entries also yield their lock file; a window whose lock is still held at fire time is skipped.
+- [plan/01.md](plan/01.md) — toolchain and environment
+- [plan/02-what-gets-monitored.md](plan/02-what-gets-monitored.md) — watcher lifecycles, scale constraints
+- [plan/03-cron-parser.md](plan/03-cron-parser.md) — cron.d parsing → watcher config
+- [plan/04-implementation-phases.md](plan/04-implementation-phases.md) — phased roadmap (complete)
+- [plan/05-flock-aware-watching.md](plan/05-flock-aware-watching.md) — flock probe + skip-locked windows
+- [plan/06-mcp-server-implementation.md](plan/06-mcp-server-implementation.md) — task-by-task MCP implementation plan
 
-Per-feature design docs live in [plan/feature-doc/](plan/feature-doc/), one file per feature — currently the [MCP server spec](plan/feature-doc/mcp-server.md) (cron/log tools over authenticated localhost HTTP; supersedes the embedded-agent plan in `cron-agent.md`), the [minilog database spec](plan/feature-doc/minilog-db.md) (recent log tails loaded into a temporary sqlite DB for SQL analysis), the [production concurrency spec](plan/feature-doc/prod-concurrency.md) (worker pool + content-keyed DB cache for ~20 concurrent users — approved, not yet built), and the [service health spec](plan/feature-doc/service-health.md) (the supervisor records error-final detections in a JSONL file Sheriffs can `cat`; the check_health MCP tool is deferred — implemented).
+Per-feature design docs (`plan/feature-doc/`, one file per feature):
 
-## out of scope
-
-- any form of alerting mechanism.
+- [mcp-server.md](plan/feature-doc/mcp-server.md) — MCP server over authenticated localhost HTTP (implemented)
+- [minilog-db.md](plan/feature-doc/minilog-db.md) — temporary in-memory sqlite over recent log tails (implemented)
+- [service-health.md](plan/feature-doc/service-health.md) — error-only JSONL detections file (implemented)
+- [prod-concurrency.md](plan/feature-doc/prod-concurrency.md) — worker pool + keyed DB cache for ~20 users (approved, not built)
+- [cron-agent.md](plan/feature-doc/cron-agent.md) — embedded LLM agent loop (superseded by mcp-server.md)
