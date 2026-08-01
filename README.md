@@ -1,18 +1,53 @@
-## Log Watcher
+# Log Watcher
 
-Applications / services or a process bump logs with prefix such as 'info', 'warn' and 'error'.
-These logs resides in path such as
+One small native binary that catches the failure classic monitoring misses:
+**a service or cron job that died with an error as its last words.** No
+metrics endpoint, no exporter, no agent framework — it reads the tails of
+the log files you already have.
 
-```bash
-ls /var/log/file.log
-```
+## Why a devops team installs this
 
-Log watcher reads the tail of log files in short periods.
-If the last log is of type 'error' and no other log entries exits, then it needs to be alerted.
+- **Detects silent deaths.** The rule: last log entry is `error` and
+  nothing follows for a quiet period → the process stalled or crashed
+  after failing. Measured detection latency on a live box: ~11 seconds
+  after the last write.
+- **Zero operational surface.** One statically-self-contained binary
+  (~3 MB, libc/libstdc++ only — sqlite compiled in), no language runtime,
+  no database server, no agents to babysit. Runs as an unprivileged
+  system user in hardened systemd units, **read-only toward your system**:
+  it never writes to, executes, or modifies anything it monitors.
+- **Zero config for cron jobs.** It parses `/etc/cron.d` and derives what
+  to watch from each entry's own `>> /var/log/x.log` redirection — new
+  cron jobs are picked up on the next rescan, nothing to register. Cron
+  logs are watched *only during their firing windows*; `flock`-guarded
+  jobs are probed so overlapping runs don't false-alarm.
+- **An incident trail you can `cat`.** Every detection appends one
+  timestamped JSON line — path, event, the actual final error message —
+  to a local JSONL file. Error events only, no noise. On-call triage
+  starts with `tail /var/lib/log-watcher/detections.jsonl`.
+- **LLM-assisted debugging built in.** A localhost-only, Bearer-token MCP
+  API exposes six tools (which cron jobs run right now, list/tail/search
+  logs, load recent tails into a temporary in-memory sqlite DB and query
+  it with SQL). Developers SSH-tunnel in and ask Claude Code — or any MCP
+  client — "is anything failing?", "count errors per level in the last
+  100 MB", "tail the inventory service log".
+- **Sane on big logs.** Every read is a bounded tail chunk (64 KiB;
+  search capped at the last 4 MiB) — designed for 10 × 2 GB logs; a poll
+  never scans a file front to back, and rotation (rename or truncate) is
+  detected via inode/size.
+- **Log-format tolerant.** Levels are read from `info`/`warn`/`error`
+  prefixes or from timestamped app-log lines
+  (`2026-07-22T15:40:00 - error: …`); ANSI color codes are handled.
+
+Deliberately **not** in the box: notification delivery (no Slack/mail —
+the JSONL file and journal are the interface; ship them with whatever
+you already use), self-healing/restarts, metrics. Detection only.
 
 ## Tech stack
 
-- Haxe transpiling to C++.
+- Haxe transpiled to C++ (hxcpp) into a native Linux binary; zero
+  runtime dependencies beyond libc/libstdc++, zero build dependencies
+  beyond Haxe 4.3 + g++ (+ `just` for the recipes).
 
 ## Build, test, run
 
