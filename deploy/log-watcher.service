@@ -1,0 +1,31 @@
+# Log watcher supervisor: watches cron.d-driven logs and the configured
+# service logs, prints detections to stdout (journal). Detection only.
+#
+# Install: cp deploy/log-watcher.service /etc/systemd/system/
+#          systemctl daemon-reload && systemctl enable --now log-watcher
+
+[Unit]
+Description=log-watcher supervisor (cron + service log watching)
+Documentation=https://github.com/shoneyJ/log-watcher
+After=network.target
+
+[Service]
+Type=simple
+User=log-watcher
+Group=log-watcher
+# read access to /var/log on Debian/Ubuntu
+SupplementaryGroups=adm
+ExecStart=/usr/local/bin/log-watcher run /etc/cron.d /opt/log-watcher/config.json
+Restart=on-failure
+RestartSec=5
+
+# The watcher only reads; lock it down. The one write is the detections
+# JSONL (service-health) — StateDirectory is the sanctioned spot for it.
+StateDirectory=log-watcher
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+# Container builds copy the repo; exclude build output and scratch so the
+# context stays small and the container compiles fresh. .haxelib/ is
+# deliberately NOT excluded — it carries hxcpp, avoiding network access.
+bin/
+.git/
+.releases/
+.superpowers/
+.dev/
+test/live/
+test/tmp/

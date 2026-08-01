@@ -10,9 +10,63 @@ analysis (counts, grouping, level filtering, time-slicing by insert order).
 
 ## Status
 
-Design approved; implementation not started. Implements on top of the MCP
-server from `mcp-server.md` (itself not yet built) — one implementation
-plan covers both specs, minilog phases after the server phases.
+Implemented 2026-07-31 per `plan/06-mcp-server-implementation.md` (one
+plan covers both specs, minilog tasks after the server tasks). Board below
+tracks this spec's tasks; the server tasks live in `mcp-server.md`.
+`load_log_db`/`query_log_db` verified end-to-end over curl (see Verified
+below); Claude Code client checks remain manual, left for the user.
+
+## Implementation board
+
+### Done
+
+- **Task 7 — MiniLog sqlite ingest** · `src/MiniLog.hx` · single-slot
+  `:memory:` DB, 100 MiB budget split across matched files, tail-share
+  chunk reads, entry folding via shared `LogTail.classify`, per-file
+  error reporting; tests native-only (`#if cpp` — interpreter has no
+  sqlite). Interp 158 / native 166 checks green, review approved.
+
+- **Task 8 — MiniLog query** · `src/MiniLog.hx` · single read-only
+  SELECT guard (trailing `;` ok, mid-statement rejected), sqlite errors
+  passed through, 200-row / 64 KiB result caps with truncation flag.
+  Interp 158 / native 179 checks green, review approved.
+
+- **Task 9 — MCP minilog tools** · `src/Mcp.hx` · `load_log_db {match}`
+  case-insensitive hint against allowlist (no match → error listing
+  paths), `query_log_db {sql}`; tools/list grows to six.
+  Interp 160 / native 190 checks green, review approved.
+
+- **Task 11 (shared) — docs sync + manual verification** · load/query
+  exercised via curl (see Verified below); Claude Code client check
+  remains for the user.
+
+### In progress
+
+*(none — Task 10 serve loop tracked in `mcp-server.md`)*
+
+### Todo
+
+*(none)*
+
+### Verified
+
+Curl-level check, 2026-07-31, against `test/live/failing.log` seeded via
+`test/produce-log.sh error 20 0` (22 lines, `test/mcp-config.json`,
+`Authorization: Bearer dev-key-change-me`):
+
+- `load_log_db {match:"failing"}` → one file matched, `bytesLoaded: 948`,
+  `entries: 20`, `truncated: false`, `error: null`, `totalEntries: 20`.
+- `query_log_db {sql:"SELECT level, count(*) AS n FROM entries GROUP BY
+  level"}` → `{rows:[{n:1,level:"error"},{n:15,level:"info"},
+  {n:4,level:"warn"}], truncated:false}` — 1 + 15 + 4 = 20, matching the
+  load.
+
+Claude Code client check, 2026-08-01 — done (details in
+`mcp-server.md`'s Verified section): a headless Claude Code session
+called `load_log_db {match:"failing"}` (40 entries, not truncated) and
+`query_log_db` (group-by-level 2/30/8, error bodies returned with their
+stack-trace continuation lines folded in). Continuation folding and the
+load→query flow verified through a real LLM client, not just curl.
 
 ## Decisions (settled with the user, 2026-07-31)
 
@@ -25,6 +79,11 @@ plan covers both specs, minilog phases after the server phases.
 - Lifecycle: **single slot, in-memory** (`sqlite :memory:`) held by the
   server process; each load replaces the previous DB wholesale; dies with
   the process. No files, no ids, no TTL.
+  *Superseded by `prod-concurrency.md` (2026-08-01) for multi-user
+  production: the slot becomes a content-keyed cache of read-only DBs —
+  60 s TTL freshness, 512 MiB global LRU budget, load dedup, and a `db`
+  id in the tool contract. Still memory-only, still dies with the
+  process.*
 - Schema: **one row per log entry** — continuation lines folded into their
   parent entry, the same rule the watcher uses.
 
@@ -71,6 +130,12 @@ New module `src/MiniLog.hx`: owns the single sqlite connection, exposes
   continuation — appended to the previous entry's body, level inherited.
   The level-prefix rule is extracted from `LogTail` into one public static
   helper both modules call (the only touch to existing code).
+  *Amended 2026-08-01: lines are sanitized before classification (ANSI
+  sequences and C0 control bytes stripped — raw control bytes made the
+  JSON output invalid), and ingestion additionally recognizes the level
+  after a leading timestamp token (`2026-07-22T15:40:00 - error: …`),
+  since real app logs put the timestamp first. The watcher's strict
+  prefix rule is unchanged.*
 - All inserts in one transaction; unreadable matched file → skipped and
   reported per-file in the load result, load continues; every file
   failing → `isError`.

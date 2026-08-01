@@ -1,0 +1,15 @@
+# log-watcher testing base (plan/04) — real cron.d format, used two ways:
+#   1. parser fixture: unit tests point the cron.d dir parameter at
+#      test/fixtures/cron.d/ (plan/03)
+#   2. live cron: mkdir -p <repo>/test/live && sudo cp this file to
+#      /etc/cron.d/log-producer (root-owned, 0644, no dot in the name)
+#
+# Paths are absolute with no $VARs — required by the watchability
+# convention (plan/03: the log path is read from the redirection).
+#
+# healthy: runs every minute, ~22 s duration, final entry 'info' -> never alerts
+# failing: runs every 5 min, final entry 'error' + continuation lines ->
+#          alert after the quiet period, gaps long enough to observe kill-self
+
+* * * * *   shoney  /home/shoney/projects/log-watcher/test/produce-log.sh info 12 2 >> /home/shoney/projects/log-watcher/test/live/healthy.log 2>&1
+*/5 * * * * shoney  /home/shoney/projects/log-watcher/test/produce-log.sh error 12 2 >> /home/shoney/projects/log-watcher/test/live/failing.log 2>&1

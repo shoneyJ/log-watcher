@@ -1,0 +1,5 @@
+{
+	"pollInterval": 1,
+	"quietPeriod": 8,
+	"rescanInterval": 60
+}

@@ -65,7 +65,9 @@ class LogTail {
 		lines.pop(); // empty piece after the final newline
 		st.offset += nl + 1;
 		for (line in lines) {
-			var lv = classify(line);
+			// relaxed rule (service-health): timestamped app logs must
+			// classify too, or their errors never trip the alert rule
+			var lv = classifyLoose(Tools.sanitize(line));
 			if (lv != null) st.lastLevel = lv; // else continuation: inherits
 		}
 		if (lines.length > 0) st.lastNewLineAt = now;
@@ -77,6 +79,17 @@ class LogTail {
 		if (StringTools.startsWith(line, "warn")) return "warn";
 		if (StringTools.startsWith(line, "error")) return "error";
 		return null;
+	}
+
+	// Real app logs put a timestamp first ("2026-07-22T15:40:00 - error: …");
+	// the relaxed rule also accepts the level after a leading token. Callers
+	// pass a sanitized line (Tools.sanitize) — ANSI codes hide the prefix.
+	static var tsLevel = ~/^\S+\s+-\s+(info|warn|error)\b/;
+
+	public static function classifyLoose(line:String):Null<String> {
+		var lv = classify(line);
+		if (lv != null) return lv;
+		return tsLevel.match(line) ? tsLevel.matched(1) : null;
 	}
 
 	// Last <= n complete lines from the final CHUNK bytes of the file.

@@ -18,6 +18,21 @@ class Tools {
 	static function out(text:String):ToolOut return {isError: false, text: text};
 	static function err(text:String):ToolOut return {isError: true, text: text};
 
+	// Log lines can carry ANSI color sequences and stray control bytes;
+	// haxe.Json.stringify does not escape C0 chars, so they would produce
+	// invalid JSON at the client. Strip sequences, drop other C0 (tab stays).
+	static var ansi = ~/\x1B\[[0-9;]*[A-Za-z]/g;
+
+	public static function sanitize(line:String):String {
+		var s = ansi.replace(line, "");
+		var buf = new StringBuf();
+		for (i in 0...s.length) {
+			var c = s.charCodeAt(i);
+			if (c >= 32 || c == 9) buf.addChar(c);
+		}
+		return buf.toString();
+	}
+
 	public static inline var TAIL_DEFAULT = 20;
 	public static inline var TAIL_MAX = 200;
 	public static inline var SEARCH_CAP = 4194304; // last 4 MiB only
@@ -85,7 +100,7 @@ class Tools {
 		var n = lines == null ? TAIL_DEFAULT : (lines > TAIL_MAX ? TAIL_MAX : (lines < 1 ? 1 : lines));
 		var got = LogTail.lastLines(path, n);
 		if (got == null) return err('log file missing: $path');
-		return out(haxe.Json.stringify(got));
+		return out(haxe.Json.stringify([for (l in got) sanitize(l)]));
 	}
 
 	public function searchLog(path:String, pattern:String, maxMatches:Null<Int>):ToolOut {
@@ -114,7 +129,7 @@ class Tools {
 				carry = lines.pop(); // last piece has no newline yet
 				for (line in lines)
 					if (line.toLowerCase().indexOf(lc) >= 0)
-						matches.push({byteOffset: offset, line: line});
+						matches.push({byteOffset: offset, line: sanitize(line)});
 				offset += got;
 			}
 		} catch (e:haxe.io.Eof) {}

@@ -1,0 +1,33 @@
+# Builds a log-watcher binary linked against Rocky Linux 9's glibc (2.34),
+# so the result runs on Rocky/RHEL/Alma 9 and anything with newer glibc.
+# Swap the base image (rockylinux:8, debian:11, ...) to target other
+# distros — glibc is forward-compatible, so build against the oldest you
+# must support.
+#
+# Usage (from the repo root; needs the project-local .haxelib/ populated,
+# i.e. `haxelib newrepo && haxelib install hxcpp` was run once):
+#   docker build -f deploy/Containerfile.rocky9 --target out -o dist/rocky9 .
+#   -> dist/rocky9/log-watcher
+
+FROM rockylinux:9 AS build
+
+RUN dnf install -y gcc-c++ tar && dnf clean all
+
+# No dnf package for Haxe on the RHEL family — official tarballs.
+ADD https://github.com/HaxeFoundation/haxe/releases/download/4.3.6/haxe-4.3.6-linux64.tar.gz /tmp/haxe.tar.gz
+ADD https://github.com/HaxeFoundation/neko/releases/download/v2-3-0/neko-2.3.0-linux64.tar.gz /tmp/neko.tar.gz
+RUN tar -xzf /tmp/haxe.tar.gz -C /opt && mv /opt/haxe_* /opt/haxe \
+ && tar -xzf /tmp/neko.tar.gz -C /opt && mv /opt/neko-*  /opt/neko
+
+ENV PATH="/opt/haxe:/opt/neko:${PATH}" \
+    HAXE_STD_PATH=/opt/haxe/std \
+    LD_LIBRARY_PATH=/opt/neko
+
+# The repo's project-local .haxelib/ (hxcpp) comes along in the COPY, so
+# no haxelib network access happens inside the container.
+COPY . /src
+WORKDIR /src
+RUN haxe build.hxml --times
+
+FROM scratch AS out
+COPY --from=build /src/bin/Main /log-watcher

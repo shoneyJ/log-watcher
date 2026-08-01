@@ -56,7 +56,10 @@ class Cron {
 	public static function parseDir(dir:String):ParseResult {
 		var res = {entries: [], skipped: []};
 		if (!FileSystem.exists(dir)) return res;
-		var names = FileSystem.readDirectory(dir);
+		var names = try FileSystem.readDirectory(dir) catch (e:Dynamic) {
+			res.skipped.push({srcFile: dir, srcLine: 0, reason: "unreadable directory"});
+			return res;
+		}
 		names.sort(Reflect.compare);
 		for (name in names) {
 			if (name.indexOf(".") >= 0) continue; // cron ignores dotted names

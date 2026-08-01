@@ -1,0 +1,4 @@
+{
+  "mcp": { "port": 8990, "apiKey": "dev-key-change-me" },
+  "logs": []
+}

@@ -1,0 +1,32 @@
+# Log watcher MCP server: cron/log tools over authenticated HTTP on
+# 127.0.0.1 only. Developers reach it from their machine via an SSH
+# tunnel (see doc/install.md).
+#
+# Install: cp deploy/log-watcher-mcp.service /etc/systemd/system/
+#          systemctl daemon-reload && systemctl enable --now log-watcher-mcp
+
+[Unit]
+Description=log-watcher MCP server (cron/log tools over localhost HTTP)
+Documentation=https://github.com/shoneyJ/log-watcher
+After=network.target
+
+[Service]
+Type=simple
+User=log-watcher
+Group=log-watcher
+SupplementaryGroups=adm
+# holds LOG_WATCHER_API_KEY (deploy/.env.example)
+EnvironmentFile=/opt/log-watcher/.env
+ExecStart=/usr/local/bin/log-watcher mcp /etc/cron.d /opt/log-watcher/config.json
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# minilog DB is ~100 MiB in-memory + overhead
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

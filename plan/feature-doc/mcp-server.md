@@ -5,6 +5,17 @@
 > temporary in-memory sqlite database for SQL analysis. The server there
 > grows to six tools and gains one piece of process state (the single DB
 > slot).
+>
+> Extended by `prod-concurrency.md` (2026-08-01) for ~20 concurrent
+> production users: the single-threaded accept loop below is superseded
+> by a 4-worker pool with per-socket timeouts, and `query_log_db` gains
+> an optional `db` argument. Statelessness is preserved — still no
+> sessions.
+>
+> Related: `service-health.md` (2026-08-01) — the supervisor gains an
+> error-only JSONL detections file for Sheriffs. Its `check_health` MCP
+> tool was deferred by the user before implementation; the MCP tool set
+> stays at six.
 
 Approved design, 2026-07-31. Supersedes `cron-agent.md`: instead of the
 binary calling an LLM itself (embedded curl agent loop), the binary exposes
@@ -16,8 +27,104 @@ built.
 
 ## Status
 
-Design approved; implementation not started. Implementation phases follow
-in a separate planning step.
+Implemented 2026-07-31 per `plan/06-mcp-server-implementation.md`. Board
+below tracks this spec's tasks (minilog tasks live in `minilog-db.md`).
+Curl-level protocol verification done (see Verified below); Claude Code
+and llama.cpp client checks are manual exercises left for the user.
+
+## Implementation board
+
+### Done
+
+- **Task 1 — Pgrep probe** · `src/Pgrep.hx`, `test/TestMain.hx` ·
+  `pgrep -f` liveness probe, argv exec, ambiguous → false. Note: brief's
+  bash-comment holder pattern was broken (bash tail-exec drops it);
+  tests hold markers via `exec -a`.
+- **Task 2 — LogTail.lastLines** · `src/LogTail.hx` · `classify` public;
+  `lastLines(path, n)` reads only the final 64 KiB chunk; `poll`
+  untouched.
+- **Task 3 — Tools listing** · `src/Tools.hx` · allowlist
+  (cron ∪ config, deduped), `get_running_crons` (flock/pgrep liveness +
+  nextFire), `list_logs` (size/mtime/source).
+
+- **Task 4 — tail_log + search_log** · `src/Tools.hx` · allowlist-guarded,
+  bounded (last 4 MiB), case-insensitive substring, newest first;
+  129 checks green both targets.
+
+- **Task 5 — Mcp envelope** · `src/Mcp.hx` · auth-first Bearer check,
+  JSON-RPC 2.0, initialize/ping/tools-list, pure `handle()` seam;
+  148 checks green both targets.
+
+- **Task 6 — tools/call dispatch** · `src/Mcp.hx` · four tools wired,
+  `isError` results for model-recoverable failures; 158 checks green
+  both targets.
+
+- **Task 10 — HTTP serve loop + `Main mcp`** · `src/Mcp.hx`,
+  `src/Main.hx` · 127.0.0.1 accept loop, config (`mcp.port`/`mcp.apiKey`
+  required, `logs` allowlist), usage line. Interp 160 / native 192 checks
+  green, review approved.
+
+- **Task 11 — docs sync + manual verification** · doc/, README,
+  CLAUDE.md, `test/mcp-config.json` · curl-level protocol verification
+  done (see Verified below); Claude Code and llama.cpp client checks are
+  manual exercises left for the user.
+
+### In progress
+
+*(none)*
+
+### Todo
+
+*(none)*
+
+### Verified
+
+Curl-level protocol check, 2026-07-31 (`./bin/Main mcp test/fixtures/cron.d
+test/mcp-config.json`, `Authorization: Bearer dev-key-change-me`):
+
+- `initialize` → `protocolVersion: "2025-03-26"`, `capabilities: {tools:{}}`.
+- `tools/list` → all six tool schemas.
+- `tools/call get_running_crons` → the 7 fixture entries (5 from
+  `edge-cases`, 2 from `log-producer`), each with schedule/command/logPath/
+  nextFire/running.
+- `tools/call load_log_db {match:"failing"}` after seeding
+  `test/live/failing.log` via `test/produce-log.sh error 20 0` →
+  `{files:[{path:.../failing.log, bytesLoaded:948, entries:20,
+  truncated:false, error:null}], totalEntries:20}`.
+- `tools/call query_log_db {sql:"SELECT level, count(*) AS n FROM entries
+  GROUP BY level"}` → `1 error / 15 info / 4 warn` (20 rows total,
+  matching the load).
+
+Server killed after (`pgrep`/port check confirmed no process left
+listening on 8990).
+
+Final-review fix, same day: `Content-Length` now counts UTF-8 bytes
+(hxcpp `String.length` is UTF-16 code units — non-ASCII error strings
+were under-declared and would truncate at strict clients). Re-verified
+over curl on an em-dash error path: declared 133 = measured 133 bytes,
+JSON parses. Suites after all fixes: interp 160, native 197, 0 failures.
+
+Claude Code client check, 2026-08-01 — done:
+
+- `claude mcp add --transport http cron-mcp http://127.0.0.1:8990/mcp
+  --header "Authorization: Bearer …"` (local scope); `claude mcp list`
+  reports **✔ Connected** — Claude Code's own MCP client completes the
+  initialize handshake against the hand-rolled server.
+- Headless session (`claude -p … --allowedTools
+  "mcp__cron-mcp__get_running_crons"`) called the tool and reported all
+  7 fixture entries with schedule, logPath, and running flags.
+- Second session drove the minilog flow end to end:
+  `load_log_db {match:"failing"}` → 40 entries / 1896 bytes / not
+  truncated; `query_log_db` group-by-level → 2 error / 30 info / 8 warn
+  (sums to 40); a follow-up SELECT returned both error entries' bodies
+  **with their indented stack-trace continuation lines folded in** —
+  the continuation rule verified through a real LLM client.
+- Server killed after; port 8990 confirmed closed. The `cron-mcp` entry
+  stays in Claude Code's local config (`claude mcp remove cron-mcp` to
+  drop it).
+
+**Open for the user**: the llama.cpp client configuration exercise —
+manual, needs a locally running llama.cpp with an MCP-capable client.
 
 ## Goal
 
@@ -80,6 +187,11 @@ Same `config.json` the supervisor uses, two new keys:
 
 - `mcp.port` and `mcp.apiKey` are **required** for the `mcp` subcommand —
   no default key, refuse to start without one (message + exit 1).
+  *Amended 2026-08-01: the key may instead come from the
+  `LOG_WATCHER_API_KEY` environment variable (`mcp.apiKey` wins when both
+  are set) so systemd's `EnvironmentFile`/`.env` can hold the secret —
+  see `deploy/.env.example` and `doc/install.md`. No key from either
+  source still refuses to start.*
 - `logs` — non-cron log allowlist: specific absolute paths only.
 - Log allowlist = cron.d-derived logPaths ∪ `logs` ∪ `services`.
 

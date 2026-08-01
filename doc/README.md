@@ -7,6 +7,7 @@ update it in the same change as the code.
 - [features.md](features.md) — feature documentation per module
 - [diagrams.md](diagrams.md) — mermaid diagrams (components, lifecycles, tick loop)
 - [file-tree.md](file-tree.md) — annotated repository file tree
+- [install.md](install.md) — server installation guide (system requirements, systemd, developer/on-call usage)
 - [server-testing.md](server-testing.md) — hands-on validation on a real server with live cron
 
 ## Project facts
@@ -44,11 +45,22 @@ update it in the same change as the code.
   ideally the flock lock files; the lock probe also needs util-linux
   `flock` in `PATH`. The watcher never writes to or executes anything found
   in cron entries.
+- **MCP server**: `Main mcp <cron.d-dir> <config.json>` exposes cron/log
+  knowledge as six MCP tools (`get_running_crons`, `list_logs`, `tail_log`,
+  `search_log`, `load_log_db`, `query_log_db`) over Bearer-authenticated
+  JSON-RPC 2.0 on `127.0.0.1:<mcp.port>` — no SDK, hand-rolled protocol
+  subset, no coupling to the supervisor. `load_log_db`/`query_log_db` load
+  hint-matched log tails into a single-slot in-memory sqlite DB (100 MiB
+  budget) for read-only SQL analysis; see `doc/features.md`.
 - **CLI**:
   - `./bin/Main watch <logfile> [quietPeriod] [pollInterval]` — one continuous watch
   - `./bin/Main run <cron.d-dir> [config.json]` — supervisor (cron + services)
+  - `./bin/Main mcp <cron.d-dir> <config.json>` — MCP server (127.0.0.1, Bearer auth)
 - **Build / test / demo**: `haxe build.hxml` (native binary),
   `haxe test.hxml` (suite on the interpreter),
   `haxe test-native.hxml && ./bin/test/TestMain` (same suite native),
   `./test/demo.sh` (end-to-end, ~2.5 min).
-- **Status**: all five implementation phases of `plan/04` are complete.
+- **Status**: all five implementation phases of `plan/04` are complete;
+  the MCP server (`plan/06`) is implemented — protocol-level verification
+  done via curl, Claude Code / llama.cpp client checks remain (see
+  `plan/feature-doc/mcp-server.md`).

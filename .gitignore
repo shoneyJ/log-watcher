@@ -8,6 +8,17 @@ dump/
 # Project-local haxelib repository (`haxelib newrepo`)
 .haxelib/
 
+# Machine-local deploy overrides (config with local log paths, real API
+# key, unit variants) — `just setup-config`/`setup-units` prefer these
+/deploy/*.local.*
+/deploy/.env.local
+
+# Versioned release archives (`just package`)
+/.releases/
+
+# Agent-tooling scratch (superpowers SDD workspaces: ledgers, review packages)
+/.superpowers/
+
 # Logs written by the live testing base (test/fixtures/cron.d/log-producer)
 /test/live/
 

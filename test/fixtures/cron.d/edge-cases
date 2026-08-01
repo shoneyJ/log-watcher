@@ -1,0 +1,32 @@
+# Parser edge-case fixture (plan 03 testing checklist) — never installed live.
+SHELL=/bin/sh
+MAILTO=root
+
+# watchable: stderr-only redirect
+0 3 * * * root /usr/local/bin/backup.sh 2>> /var/log/backup-errors.log
+
+# watchable: alias + combined &>> redirect
+@daily root /usr/local/bin/report.sh &>> /var/log/nightly-report.log
+
+# watchable: day-of-week name range
+15 4 * * mon-fri root /usr/local/bin/weekday.sh >> /var/log/weekday.log 2>&1
+
+# watchable: dom/dow OR quirk schedule
+0 0 13 * fri root /usr/local/bin/thirteenth.sh >> /var/log/thirteenth.log
+
+# not watchable: pipe instead of redirection
+*/10 * * * * root /usr/local/bin/health.sh | logger -t health
+
+# not watchable: $VAR in the redirection path
+30 2 * * * root /usr/local/bin/dump.sh >> $HOME/dump.log 2>&1
+
+# not watchable: no redirection at all
+45 1 * * * root /usr/local/bin/tidy.sh
+
+# out of scope
+@reboot root /usr/local/bin/warmup.sh >> /var/log/warmup.log
+
+# malformed: too few fields
+* * * root broken
+
+*/20 * * * * root flock -w 600 /var/run/test.lock -c  "cd /data/scripts; bash /data/scripts/test.sh >> /var/log/test.log 2>&1"

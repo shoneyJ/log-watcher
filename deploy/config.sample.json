@@ -1,0 +1,19 @@
+{
+  "pollInterval": 2,
+  "quietPeriod": 10,
+  "rescanInterval": 60,
+
+  "services": [
+    "/var/log/myservice/app.log"
+  ],
+
+  "detections": "/var/lib/log-watcher/detections.jsonl",
+
+  "logs": [
+    "/var/log/postgresql/postgresql-16-main.log"
+  ],
+
+  "mcp": {
+    "port": 8990
+  }
+}

@@ -6,6 +6,7 @@ typedef SupConfig = {
 	var quietPeriod:Float;
 	var rescanInterval:Float;
 	var services:Array<String>; // log paths watched continuously
+	var ?detections:String; // JSONL sink for error events (service-health)
 }
 
 typedef CronWatch = {
@@ -67,7 +68,11 @@ class Supervisor {
 		}
 
 		for (w in services)
-			if (w.due(now)) w.tick(now);
+			if (w.due(now)) {
+				var was = w.alerted;
+				w.tick(now);
+				if (w.alerted && !was) detect(w.path, "service", "alert", now);
+			}
 
 		var finished = [];
 		for (logPath => w in active) {
@@ -82,8 +87,10 @@ class Supervisor {
 				case ErrorFinal: "ERROR-final";
 				case Miss: "missed (no log activity in the window)";
 			});
-			if (res == ErrorFinal)
+			if (res == ErrorFinal) {
 				Util.say('ALERT $logPath: cron job finished with error as the last entry');
+				detect(logPath, "cron", "error-final", now);
+			}
 			active.remove(logPath); // kill-self: nothing of the watch remains
 			var cw = scheduled.get(logPath);
 			if (cw != null) cw.nextFire = computeNext(cw.schedules, now);
@@ -130,6 +137,41 @@ class Supervisor {
 						active.set(logPath, new Watcher(logPath, cfg.quietPeriod, cfg.pollInterval, false, now));
 					}
 				}
+		}
+	}
+
+	// service-health detections sink: error events only, one JSON line per
+	// rule hit, open-append-close (logrotate-safe). The file exists to tell
+	// the Sheriff something is wrong and where to look; a sink failure is
+	// reported but never takes the supervisor down.
+	function detect(logPath:String, source:String, event:String, now:Float):Void {
+		if (cfg.detections == null) return;
+		var lastError = "";
+		var lines = LogTail.lastLines(logPath, 50);
+		if (lines != null) {
+			var i = lines.length - 1;
+			while (i >= 0) {
+				var clean = Tools.sanitize(lines[i]);
+				if (LogTail.classifyLoose(clean) == "error") {
+					lastError = clean;
+					break;
+				}
+				i--;
+			}
+		}
+		var line = haxe.Json.stringify({
+			ts: StringTools.replace(Date.fromTime(now * 1000.).toString(), " ", "T"),
+			path: logPath,
+			source: source,
+			event: event,
+			lastError: lastError,
+		});
+		try {
+			var fo = sys.io.File.append(cfg.detections, false);
+			fo.writeString(line + "\n");
+			fo.close();
+		} catch (e:Dynamic) {
+			Util.say('DETECTIONS-SINK-ERROR ${cfg.detections}: $e');
 		}
 	}
 
